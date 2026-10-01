@@ -181,6 +181,20 @@ export default function Detail() {
                 </Grid>
                 <Grid item xs={6} sm={4}>
                   <Typography variant="caption" color="text.secondary">
+                    曾用编号（别名）
+                  </Typography>
+                  {sample.aliases && sample.aliases.length ? (
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                      {sample.aliases.map((a) => (
+                        <Chip key={a} size="small" variant="outlined" label={a} />
+                      ))}
+                    </Stack>
+                  ) : (
+                    <Typography variant="body1">—</Typography>
+                  )}
+                </Grid>
+                <Grid item xs={6} sm={4}>
+                  <Typography variant="caption" color="text.secondary">
                     总重量
                   </Typography>
                   <Typography variant="body1">{formatWeight(sample.totalWeight)}</Typography>

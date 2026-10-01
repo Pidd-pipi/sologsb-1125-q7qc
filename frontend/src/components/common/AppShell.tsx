@@ -45,6 +45,8 @@ const NAV = [
   { to: '/sections', label: '切片库' },
   { to: '/analysis', label: '分析检测' },
   { to: '/locations', label: '发现地分布' },
+  { to: '/renumber', label: '整批换号' },
+  { to: '/snapshots', label: '导出清单' },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {

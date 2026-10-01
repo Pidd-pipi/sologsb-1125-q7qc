@@ -3,21 +3,28 @@ import type { MeteoriteSample } from '../types/sample';
 import type { FindRecord } from '../types/find';
 import type { ThinSection } from '../types/section';
 import type { AnalysisRecord } from '../types/analysis';
+import type { ExportSnapshot } from '../types/snapshot';
 
 /** 库名固定为 gbmeteorite-db */
 export const DB_NAME = 'gbmeteorite-db';
+
+/** 批次版本键：整批换号时自增，用于并发提交冲突检测 */
+export const BATCH_REVISION_KEY = 'batchRevision';
 
 /**
  * 版本历史（IndexedDB 升级迁移）：
  *  - v1：建 samples / finds / sections 三张表
  *  - v2：新增 analysis 表，并为 analysis 加 sampleId 索引
  *  - v3：为 samples 补 updatedAt 字段，并按 id 回填旧记录
+ *  - v4：samples 增 aliases 多入口索引（旧号留作唯一别名）；新增 snapshots 导出清单表与 meta 批次版本表
  */
 export class MeteoriteDB extends Dexie {
   samples!: Table<MeteoriteSample, string>;
   finds!: Table<FindRecord, string>;
   sections!: Table<ThinSection, string>;
   analysis!: Table<AnalysisRecord, string>;
+  snapshots!: Table<ExportSnapshot, string>;
+  meta!: Table<{ key: string; value: number }, string>;
 
   constructor() {
     super(DB_NAME);
@@ -65,6 +72,30 @@ export class MeteoriteDB extends Dexie {
             }
           });
       });
+
+    this.version(4)
+      .stores({
+        samples:
+          'id, sampleNo, category, chemicalGroup, totalWeight, createdAt, updatedAt, *aliases',
+        finds: 'id, sampleId, region, createdAt',
+        sections: 'id, sectionNo, sampleId, thickness, createdAt',
+        analysis: 'id, sampleId, sectionId, method, testedAt, createdAt',
+        snapshots: 'id, label, createdAt',
+        meta: 'key',
+      })
+      .upgrade(async (tx) => {
+        // v4：样本补 aliases 数组（换号前的旧号留作唯一别名），并初始化批次版本
+        await tx
+          .table<MeteoriteSample, string>('samples')
+          .toCollection()
+          .modify((sample) => {
+            if (!Array.isArray(sample.aliases)) sample.aliases = [];
+          });
+        const meta = tx.table<{ key: string; value: number }, string>('meta');
+        if ((await meta.get(BATCH_REVISION_KEY)) === undefined) {
+          await meta.put({ key: BATCH_REVISION_KEY, value: 0 });
+        }
+      });
   }
 }
 
@@ -86,6 +117,7 @@ export async function seedIfEmpty(): Promise<void> {
       {
         id: 'sample_seed_1',
         sampleNo: 'MET-2024-001',
+        aliases: [],
         totalWeight: 1250.4,
         category: 'chondrite',
         chemicalGroup: 'H',
@@ -99,6 +131,7 @@ export async function seedIfEmpty(): Promise<void> {
       {
         id: 'sample_seed_2',
         sampleNo: 'MET-2024-002',
+        aliases: [],
         totalWeight: 8420,
         category: 'iron',
         chemicalGroup: 'IAB',
@@ -112,6 +145,7 @@ export async function seedIfEmpty(): Promise<void> {
       {
         id: 'sample_seed_3',
         sampleNo: 'MET-2024-003',
+        aliases: [],
         totalWeight: 318.9,
         category: 'achondrite',
         chemicalGroup: 'ungrouped',

@@ -16,8 +16,10 @@ export type StorageLocation = 'cabinet-a' | 'cabinet-b' | 'desiccator' | 'loan-o
 /** 陨石样本（MeteoriteSample） */
 export interface MeteoriteSample {
   id: string;
-  /** 样本编号，形如 MET-2024-001 */
+  /** 样本编号，现行体系为 GB-MET-<年>-<三位序号>；换号前的旧号见 aliases */
   sampleNo: string;
+  /** 别名（曾用编号）：整批换号前的旧号留作唯一别名，可继续被检索 */
+  aliases?: string[];
   /** 总重量，单位 g */
   totalWeight: number;
   category: SampleCategory;
@@ -84,4 +86,17 @@ export interface ClassificationAdvice {
 /** 样本编号生成：MET-<年>-<三位序号> */
 export function generateSampleNo(year: number, seq: number): string {
   return `MET-${year}-${String(seq).padStart(3, '0')}`;
+}
+
+/** GB-MET 整批换号后的新编号前缀 */
+export const GB_MET_PREFIX = 'GB-MET-';
+
+/** 判断编号是否已是 GB-MET 体系 */
+export function isGbMetNo(no: string): boolean {
+  return new RegExp(`^${GB_MET_PREFIX}\\d{4}-\\d{3,}$`).test(no);
+}
+
+/** 生成 GB-MET 编号：GB-MET-<年>-<三位序号> */
+export function generateGbMetNo(year: number, seq: number): string {
+  return `${GB_MET_PREFIX}${year}-${String(seq).padStart(3, '0')}`;
 }

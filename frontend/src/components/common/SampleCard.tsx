@@ -56,6 +56,19 @@ export function SampleCard({
               <Typography variant="h6" fontWeight={700} letterSpacing="0.02em">
                 {sample.sampleNo}
               </Typography>
+              {sample.aliases && sample.aliases.length ? (
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.25 }}>
+                  {sample.aliases.map((a) => (
+                    <Chip
+                      key={a}
+                      size="small"
+                      variant="outlined"
+                      label={`旧号 ${a}`}
+                      sx={{ height: 20, fontSize: '0.7rem' }}
+                    />
+                  ))}
+                </Stack>
+              ) : null}
             </Box>
             <Typography variant="h6" fontWeight={700} color="primary.main" whiteSpace="nowrap">
               {formatWeight(sample.totalWeight)}

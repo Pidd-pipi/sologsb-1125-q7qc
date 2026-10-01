@@ -1,25 +1,37 @@
 import { create } from 'zustand';
 import { db, makeId, seedIfEmpty } from '../db';
+import { getBatchRevision } from '../services/renumber';
 import type { AnalysisRecord } from '../types/analysis';
 import type { FindRecord } from '../types/find';
 import type { MeteoriteSample } from '../types/sample';
 import type { ThinSection } from '../types/section';
+import type { ExportSnapshot } from '../types/snapshot';
+import { buildSnapshotItems } from '../types/snapshot';
 
 export interface SampleState {
   samples: MeteoriteSample[];
   finds: FindRecord[];
   sections: ThinSection[];
   analysis: AnalysisRecord[];
+  snapshots: ExportSnapshot[];
+  /** 批次版本号：整批换号时自增，用于并发提交冲突检测 */
+  revision: number;
   loading: boolean;
   loaded: boolean;
   loadAll: () => Promise<void>;
-  addSample: (input: Omit<MeteoriteSample, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+  addSample: (
+    input: Omit<MeteoriteSample, 'id' | 'createdAt' | 'updatedAt' | 'aliases'> & {
+      aliases?: string[];
+    },
+  ) => Promise<string>;
   updateSample: (id: string, patch: Partial<MeteoriteSample>) => Promise<void>;
   removeSample: (id: string) => Promise<void>;
   addFind: (input: Omit<FindRecord, 'id' | 'createdAt'>) => Promise<string>;
   addSection: (input: Omit<ThinSection, 'id' | 'createdAt'>) => Promise<string>;
   updateSection: (id: string, patch: Partial<ThinSection>) => Promise<void>;
   addAnalysis: (input: Omit<AnalysisRecord, 'id' | 'createdAt'>) => Promise<string>;
+  createSnapshot: (label: string) => Promise<string>;
+  deleteSnapshot: (id: string) => Promise<void>;
   nextSampleSeq: () => number;
 }
 
@@ -28,28 +40,39 @@ export const useSampleStore = create<SampleState>((set, get) => ({
   finds: [],
   sections: [],
   analysis: [],
+  snapshots: [],
+  revision: 0,
   loading: false,
   loaded: false,
 
   loadAll: async () => {
     set({ loading: true });
     await seedIfEmpty();
-    const [samples, finds, sections, analysis] = await Promise.all([
+    const [samples, finds, sections, analysis, snapshots, revision] = await Promise.all([
       db.samples.toArray(),
       db.finds.toArray(),
       db.sections.toArray(),
       db.analysis.toArray(),
+      db.snapshots.toArray(),
+      getBatchRevision(db),
     ]);
     samples.sort((a, b) => b.createdAt - a.createdAt);
     finds.sort((a, b) => b.createdAt - a.createdAt);
     sections.sort((a, b) => b.createdAt - a.createdAt);
     analysis.sort((a, b) => b.createdAt - a.createdAt);
-    set({ samples, finds, sections, analysis, loading: false, loaded: true });
+    snapshots.sort((a, b) => b.createdAt - a.createdAt);
+    set({ samples, finds, sections, analysis, snapshots, revision, loading: false, loaded: true });
   },
 
   addSample: async (input) => {
     const now = Date.now();
-    const record: MeteoriteSample = { ...input, id: makeId('sample'), createdAt: now, updatedAt: now };
+    const record: MeteoriteSample = {
+      ...input,
+      id: makeId('sample'),
+      createdAt: now,
+      updatedAt: now,
+      aliases: input.aliases ?? [],
+    };
     await db.samples.add(record);
     set({ samples: [record, ...get().samples] });
     return record.id;
@@ -102,6 +125,24 @@ export const useSampleStore = create<SampleState>((set, get) => ({
     await db.analysis.add(record);
     set({ analysis: [record, ...get().analysis] });
     return record.id;
+  },
+
+  createSnapshot: async (label) => {
+    const now = Date.now();
+    const record: ExportSnapshot = {
+      id: makeId('snapshot'),
+      label,
+      createdAt: now,
+      items: buildSnapshotItems(get().samples),
+    };
+    await db.snapshots.add(record);
+    set({ snapshots: [record, ...get().snapshots] });
+    return record.id;
+  },
+
+  deleteSnapshot: async (id) => {
+    await db.snapshots.delete(id);
+    set({ snapshots: get().snapshots.filter((s) => s.id !== id) });
   },
 
   nextSampleSeq: () => {

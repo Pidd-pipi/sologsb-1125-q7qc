@@ -26,7 +26,7 @@ export function useSampleFilter(override?: Partial<{ category: string; group: st
       if (override?.category && s.category !== override.category) return false;
       if (override?.group && s.chemicalGroup !== override.group) return false;
       if (kw) {
-        const hay = `${s.sampleNo} ${s.note ?? ''}`.toLowerCase();
+        const hay = `${s.sampleNo} ${(s.aliases ?? []).join(' ')} ${s.note ?? ''}`.toLowerCase();
         if (!hay.includes(kw)) return false;
       }
       return true;
