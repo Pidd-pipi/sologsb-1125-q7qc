@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import PublicIcon from '@mui/icons-material/Public';
+import { catalogEvents } from '../../services/catalogEvents';
 import { useSampleStore } from '../../stores/sampleStore';
 import { useToastStore } from '../../stores/uiStore';
 
@@ -45,6 +46,8 @@ const NAV = [
   { to: '/sections', label: '切片库' },
   { to: '/analysis', label: '分析检测' },
   { to: '/locations', label: '发现地分布' },
+  { to: '/renumber', label: '整批换号 GB-MET' },
+  { to: '/exports', label: '导出清单' },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {
@@ -57,6 +60,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loaded) void loadAll();
   }, [loaded, loadAll]);
+
+  // 另一标签页（另一会话）改动档案：后台静默重载本页数据；换号页另有预览失效提示
+  useEffect(() => {
+    return catalogEvents.subscribe(() => {
+      void loadAll();
+    });
+  }, [loadAll]);
 
   return (
     <ThemeProvider theme={theme}>

@@ -40,19 +40,33 @@ docker compose down
 
 | 路由 | 说明 | 消费模型 |
 | --- | --- | --- |
-| `/` | 样本总览：卡片流 + 分类/化学群/重量区间筛选与排序，缺坐标或缺切片显示角标 | MeteoriteSample |
+| `/` | 样本总览：卡片流 + 分类/化学群/重量区间筛选与排序，缺坐标或缺切片显示角标；关键词同时命中旧标签号（别名） | MeteoriteSample |
 | `/samples/new` | 样本登记：编号生成、分类化学群、重量、存放位置，可补录发现地坐标并即时校验 | MeteoriteSample、FindRecord |
-| `/samples/:id` | 样本详情：基本信息 + 发现地摘要 + 切片列表 + 分析记录，可就地新增 | 四个模型 |
+| `/samples/:id` | 样本详情：基本信息 + 发现地摘要 + 切片列表 + 分析记录，可就地新增；旧档案 id 自动重定向到换号后的新档案 | 四个模型 |
 | `/sections` | 切片库：按厚度与矿物占比筛选，回跳样本，批量标注质量 | ThinSection、MeteoriteSample |
 | `/analysis` | 分析检测：录入 Fa / Fs / Ni / 铁纹石带宽，实时分类建议与阈值命中说明 | AnalysisRecord、MeteoriteSample |
 | `/locations` | 发现地分布：SVG 网格按经纬度打点、按分类着色、点选弹出样本清单 | FindRecord、MeteoriteSample |
+| `/renumber` | **整批换号 GB-MET**：勾选样本 → 自动建议 GB-MET 号 → 预检五类受影响条目 → 原子提交；展示历史批次与不可变快照 | 全部模型 + RenumberBatch、HistorySnapshot |
+| `/exports` | **导出清单**：导出时刻冻结样本号与重量；换号后条目引用指向新档案，清单仍显示当时编号（现号对照） | ExportManifest、MeteoriteSample |
 
 ## 数据模型（`src/types/` 独立文件）
 
-- `types/sample.ts` — **MeteoriteSample**：id、样本编号、总重量 g、分类、化学群、风化等级 W0–W4、发现/坠落、存放位置
+- `types/sample.ts` — **MeteoriteSample**：id、样本编号（v4 起含 `aliases` 旧号唯一别名）、总重量 g、分类、化学群、风化等级 W0–W4、发现/坠落、存放位置
 - `types/find.ts` — **FindRecord**：id、关联样本、地名、国家地区、经纬度、坐标来源（GPS/文献）、发现环境、发现者
 - `types/section.ts` — **ThinSection**：id、切片编号、关联样本、厚度 μm、制样方式、矿物占比、显微照片清单
 - `types/analysis.ts` — **AnalysisRecord**：id、关联样本或切片、方法、橄榄石 Fa、辉石 Fs、Ni wt%、铁纹石带宽 mm、检测日期
+- `types/manifest.ts` — **ExportManifest / ExportManifestItem**：导出清单；条目在导出时刻冻结 `sampleNoAtExport` 与重量，换号只改 `sampleId` 引用
+- `types/snapshot.ts` — **HistorySnapshot**：换号提交时落的不可变冻结副本（样本+发现地+切片+检测），永远显示当时编号
+- `types/renumber.ts` — **RenumberBatch / RenumberPreview**：换号批次记录、预检视图、阻断问题码、GB-MET 格式与建议号
+
+## 整批换号（GB-MET 并入）规则
+
+- **预检不落库**：`/renumber` 先只读生成清单，逐样本列出受影响的 ① 样本 ② 发现地 ③ 切片 ④ 检测记录 ⑤ 导出清单条目。
+- **整批不改（原子）**：新号为空/格式不符（`GB-MET-<至少4位数字>`）、批内重号、撞现有编号、旧别名被复用、检测记录指向缺失/不一致切片等任一阻断问题命中时，提交在单事务内整体回滚，零部分写入。
+- **旧号唯一别名**：提交采用「新档案接替」语义——旧档案删除、新档案继承全部属性并把旧编号收入 `aliases`（多轮换号累积去重）；发现地/切片/检测/导出清单的 `sampleId` 在同一事务里全部改指新档案。
+- **历史快照**：每批落一份 `HistorySnapshot`，冻结换号当时的编号与关联记录，只增不改；旧详情页链接经快照 `idMap` 链重定向到现存档案。
+- **导出清单**：`sampleNoAtExport` 冻结不随后续换号改写，`/exports` 同时展示冻结号与当前号对照。
+- **并发（两人同一批）**：`meta` 表单行保存 `catalogVersion` 乐观版本，预检同时记录受影响样本的内容指纹；另一标签页/会话先提交会推进版本，后到者提交抛 `CatalogStaleError` 且整批不落库，必须重新预览（BroadcastChannel + storage 双通道即时通知本地方预览作废），两批结果不会混写。
 
 ## 目录结构
 
@@ -70,23 +84,27 @@ sologsb-1125/
     ├── vite.config.ts
     ├── public/favicon.svg
     └── src/
-        ├── types/{sample,find,section,analysis}.ts
-        ├── db/index.ts                 # Dexie 封装与 v1→v3 升级迁移
+        ├── types/{sample,find,section,analysis,manifest,snapshot,renumber}.ts
+        ├── db/index.ts                 # Dexie 封装与 v1→v4 升级迁移
+        ├── services/{renumber,catalogEvents}.ts  # 整批换号预检/原子提交、跨标签页通知
+        ├── scripts/verify-renumber.ts  # fake-indexeddb 换号逻辑验证
         ├── stores/{sampleStore,uiStore}.ts
         ├── components/common/{SampleCard,Badge,FieldGroup,EmptyState,CoordinatePicker,AppShell}.tsx
         ├── hooks/{useSampleFilter,useLocalDraft,useRegionStats}.ts
-        ├── pages/{Overview,New,Detail,Sections,Analysis,Locations}.tsx
+        ├── pages/{Overview,New,Detail,Sections,Analysis,Locations,Renumber,Exports}.tsx
         ├── router/index.tsx
         └── utils/{classify,format,geo}.ts
 ```
 
 ## 数据存储说明
 
-- **库名**：`gbmeteorite-db`；表：`samples`、`finds`、`sections`、`analysis`
+- **库名**：`gbmeteorite-db`；表：`samples`、`finds`、`sections`、`analysis`、`exportManifests`、`historySnapshots`、`renumberBatches`、`meta`
 - **版本迁移**：
   - v1 建 `samples` / `finds` / `sections`
   - v2 新增 `analysis` 表并加 `sampleId` 索引
   - v3 为 `samples` 补 `updatedAt` 字段并按 id 回填旧记录
+  - v4 整批换号：`samples` 加 `*aliases` 多值索引（旧号唯一别名）；新增 `meta`（catalogVersion 乐观版本）、`exportManifests`、`historySnapshots`、`renumberBatches`；旧样本回填空 `aliases`
+- **逻辑验证**：`npm run verify:renumber`（fake-indexeddb，38 项断言：五类预检、撞车/关系缺失原子回滚、别名唯一、引用重指、快照冻结、并发后到者失败）
 - **草稿**：`/samples/new` 与 `/analysis` 的表单草稿写入 localStorage（键前缀 `gbmeteorite:draft:`），切页自动恢复，提交后清理
 - 首次打开会灌入 3 份演示样本、2 条发现记录、2 张切片与 2 条检测记录，便于直接体验筛选与打点
 

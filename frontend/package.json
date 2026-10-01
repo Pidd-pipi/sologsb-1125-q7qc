@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --port 21825"
+    "preview": "vite preview --port 21825",
+    "verify:renumber": "esbuild scripts/verify-renumber.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/verify-renumber.mjs --log-level=warning && node node_modules/.tmp/verify-renumber.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.13.5",
@@ -24,6 +25,7 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "~5.7.3",
     "vite": "^6.1.0"
   }

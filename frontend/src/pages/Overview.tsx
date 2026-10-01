@@ -147,10 +147,10 @@ export default function Overview() {
             <TextField
               id="filter-keyword"
               size="small"
-              label="编号 / 备注关键词"
+              label="现编号 / 旧标签号 / 备注关键词"
               value={ui.keyword}
               onChange={(e) => ui.setKeyword(e.target.value)}
-              sx={{ width: 220 }}
+              sx={{ width: 240 }}
             />
             <FormControl size="small" sx={{ width: 160 }}>
               <InputLabel id="sort-label">排序</InputLabel>

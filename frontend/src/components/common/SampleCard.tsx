@@ -56,6 +56,11 @@ export function SampleCard({
               <Typography variant="h6" fontWeight={700} letterSpacing="0.02em">
                 {sample.sampleNo}
               </Typography>
+              {(sample.aliases ?? []).length > 0 && (
+                <Typography variant="caption" color="text.secondary" component="div">
+                  旧标签号：{(sample.aliases ?? []).join('、')}
+                </Typography>
+              )}
             </Box>
             <Typography variant="h6" fontWeight={700} color="primary.main" whiteSpace="nowrap">
               {formatWeight(sample.totalWeight)}

@@ -30,6 +30,11 @@ export interface MeteoriteSample {
   createdAt: number;
   /** v3 升级迁移新增字段 */
   updatedAt: number;
+  /**
+   * 历史编号别名（v4 换号并入 GB-MET 体系时新增）。
+   * 旧标签号唯一留存在这里，支持旧号检索；多值索引见 db v4。
+   */
+  aliases?: string[];
 }
 
 export const CATEGORY_LABELS: Record<SampleCategory, string> = {

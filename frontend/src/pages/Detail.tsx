@@ -62,12 +62,22 @@ export default function Detail() {
   const addSection = useSampleStore((s) => s.addSection);
   const addAnalysis = useSampleStore((s) => s.addAnalysis);
   const updateSample = useSampleStore((s) => s.updateSample);
+  const resolveSampleId = useSampleStore((s) => s.resolveSampleId);
   const notify = useToastStore((s) => s.notify);
 
-  const sample = useMemo(() => samples.find((s) => s.id === id), [samples, id]);
-  const find = useMemo(() => finds.find((f) => f.sampleId === id), [finds, id]);
-  const mySections = useMemo(() => sections.filter((s) => s.sampleId === id), [sections, id]);
-  const myAnalysis = useMemo(() => analysis.filter((a) => a.sampleId === id), [analysis, id]);
+  // 换号后旧档案 id 会重定向到新档案，旧书签 / 切片页回跳仍然可达
+  const resolvedId = useMemo(() => resolveSampleId(id), [resolveSampleId, id]);
+
+  const sample = useMemo(() => samples.find((s) => s.id === resolvedId), [samples, resolvedId]);
+  const find = useMemo(() => finds.find((f) => f.sampleId === resolvedId), [finds, resolvedId]);
+  const mySections = useMemo(
+    () => sections.filter((s) => s.sampleId === resolvedId),
+    [sections, resolvedId],
+  );
+  const myAnalysis = useMemo(
+    () => analysis.filter((a) => a.sampleId === resolvedId),
+    [analysis, resolvedId],
+  );
 
   const [sectionDraft, setSectionDraft] = useState({
     sectionNo: '',
@@ -178,6 +188,11 @@ export default function Detail() {
                     编号
                   </Typography>
                   <Typography variant="body1">{sample.sampleNo}</Typography>
+                  {(sample.aliases ?? []).length > 0 && (
+                    <Typography variant="caption" color="text.secondary" component="div">
+                      旧标签号（唯一别名）：{(sample.aliases ?? []).join('、')}
+                    </Typography>
+                  )}
                 </Grid>
                 <Grid item xs={6} sm={4}>
                   <Typography variant="caption" color="text.secondary">
